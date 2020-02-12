@@ -9,6 +9,8 @@ from keras.layers import (
     UpSampling2D,
     Input,
     concatenate,
+    multiply,
+    add,
     Activation,
 )
 
@@ -20,6 +22,42 @@ def upsample_conv(filters, kernel_size, strides, padding):
 def upsample_simple(filters, kernel_size, strides, padding):
     return UpSampling2D(strides)
 
+def attention_gate(inp_1, inp_2, n_intermediate_filters):
+    """Attention gate. Compresses both inputs to n_intermediate_filters filters before processing.
+       Implemented as proposed by Oktay et al. in their Attention U-net, see: https://arxiv.org/abs/1804.03999.
+    """
+    inp_1_conv = Conv2D(
+        n_intermediate_filters,
+        kernel_size=1,
+        strides=1,
+        padding="same",
+        kernel_initializer="he_normal",
+    )(inp_1)
+    inp_2_conv = Conv2D(
+        n_intermediate_filters,
+        kernel_size=1,
+        strides=1,
+        padding="same",
+        kernel_initializer="he_normal",
+    )(inp_2)
+
+    f = Activation("relu")(add([inp_1_conv, inp_2_conv]))
+    g = Conv2D(
+        filters=1,
+        kernel_size=1,
+        strides=1,
+        padding="same",
+        kernel_initializer="he_normal",
+    )(f)
+    h = Activation("sigmoid")(g)
+    return multiply([inp_1, h])
+
+def attention_concat(conv_below, skip_connection):
+    """Performs concatenation of upsampled conv_below with attention gated version of skip-connection
+    """
+    below_filters = conv_below.get_shape().as_list()[-1]
+    attention_across = attention_gate(skip_connection, conv_below, below_filters)
+    return concatenate([conv_below, attention_across])
 
 def conv2d_block(
     inputs,
@@ -77,6 +115,7 @@ def custom_unet(
     dropout_change_per_layer=0.0,
     dropout_type="spatial",
     use_dropout_on_upsampling=False,
+    use_attention=False,
     filters=16,
     num_layers=4,
     output_activation="sigmoid",
@@ -104,6 +143,8 @@ def custom_unet(
 
     use_dropout_on_upsampling (bool): Whether to use dropout in the decoder part of the network
 
+    use_attention (bool): Whether to use an attention dynamic when concatenating with the skip-connection, implemented as proposed by Oktay et al. [3]
+
     filters (int): Convolutional filters in the initial convolutional block. Will be doubled every block
 
     num_layers (int): Number of total layers in the encoder not including the bottleneck layer
@@ -119,6 +160,8 @@ def custom_unet(
 
     [1]: https://arxiv.org/abs/1505.04597
     [2]: https://arxiv.org/pdf/1411.4280.pdf
+    [3]: https://arxiv.org/abs/1804.03999
+
     """
 
     if upsample_mode == "deconv":
@@ -162,7 +205,10 @@ def custom_unet(
         filters //= 2  # decreasing number of filters with each layer
         dropout -= dropout_change_per_layer
         x = upsample(filters, (2, 2), strides=(2, 2), padding="same")(x)
-        x = concatenate([x, conv])
+        if use_attention:
+            x = attention_concat(conv_below=x, skip_connection=conv)
+        else:
+            x = concatenate([x, conv])
         x = conv2d_block(
             inputs=x,
             filters=filters,
