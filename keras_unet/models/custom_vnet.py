@@ -1,12 +1,13 @@
-from keras.models import Model
-from keras.layers import (
+import tensorflow
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (
     BatchNormalization,
-    Conv2D,
-    Conv2DTranspose,
-    MaxPooling2D,
+    Conv3D,
+    Conv3DTranspose,
+    MaxPooling3D,
     Dropout,
-    SpatialDropout2D,
-    UpSampling2D,
+    SpatialDropout3D,
+    UpSampling3D,
     Input,
     concatenate,
     multiply,
@@ -16,25 +17,25 @@ from keras.layers import (
 
 
 def upsample_conv(filters, kernel_size, strides, padding):
-    return Conv2DTranspose(filters, kernel_size, strides=strides, padding=padding)
+    return Conv3DTranspose(filters, kernel_size, strides=strides, padding=padding)
 
 
 def upsample_simple(filters, kernel_size, strides, padding):
-    return UpSampling2D(strides)
+    return UpSampling3D(strides)
 
 
 def attention_gate(inp_1, inp_2, n_intermediate_filters):
     """Attention gate. Compresses both inputs to n_intermediate_filters filters before processing.
        Implemented as proposed by Oktay et al. in their Attention U-net, see: https://arxiv.org/abs/1804.03999.
     """
-    inp_1_conv = Conv2D(
+    inp_1_conv = Conv3D(
         n_intermediate_filters,
         kernel_size=1,
         strides=1,
         padding="same",
         kernel_initializer="he_normal",
     )(inp_1)
-    inp_2_conv = Conv2D(
+    inp_2_conv = Conv3D(
         n_intermediate_filters,
         kernel_size=1,
         strides=1,
@@ -43,7 +44,7 @@ def attention_gate(inp_1, inp_2, n_intermediate_filters):
     )(inp_2)
 
     f = Activation("relu")(add([inp_1_conv, inp_2_conv]))
-    g = Conv2D(
+    g = Conv3D(
         filters=1,
         kernel_size=1,
         strides=1,
@@ -62,20 +63,20 @@ def attention_concat(conv_below, skip_connection):
     return concatenate([conv_below, attention_across])
 
 
-def conv2d_block(
+def conv3d_block(
     inputs,
     use_batch_norm=True,
     dropout=0.3,
     dropout_type="spatial",
     filters=16,
-    kernel_size=(3, 3),
+    kernel_size=(3, 3, 3),
     activation="relu",
     kernel_initializer="he_normal",
     padding="same",
 ):
 
     if dropout_type == "spatial":
-        DO = SpatialDropout2D
+        DO = SpatialDropout3D
     elif dropout_type == "standard":
         DO = Dropout
     else:
@@ -83,7 +84,7 @@ def conv2d_block(
             f"dropout_type must be one of ['spatial', 'standard'], got {dropout_type}"
         )
 
-    c = Conv2D(
+    c = Conv3D(
         filters,
         kernel_size,
         activation=activation,
@@ -95,7 +96,7 @@ def conv2d_block(
         c = BatchNormalization()(c)
     if dropout > 0.0:
         c = DO(dropout)(c)
-    c = Conv2D(
+    c = Conv3D(
         filters,
         kernel_size,
         activation=activation,
@@ -128,7 +129,7 @@ def custom_unet(
     Customisable UNet architecture (Ronneberger et al. 2015 [1]).
 
     Arguments:
-    input_shape: 3D Tensor of shape (x, y, num_channels)
+    input_shape: 4D Tensor of shape (x, y, z, num_channels)
 
     num_classes (int): Unique classes in the output mask. Should be set to 1 for binary segmentation
 
@@ -178,7 +179,7 @@ def custom_unet(
 
     down_layers = []
     for l in range(num_layers):
-        x = conv2d_block(
+        x = conv3d_block(
             inputs=x,
             filters=filters,
             use_batch_norm=use_batch_norm,
@@ -187,11 +188,11 @@ def custom_unet(
             activation=activation,
         )
         down_layers.append(x)
-        x = MaxPooling2D((2, 2))(x)
+        x = MaxPooling3D((2, 2, 2))(x)
         dropout += dropout_change_per_layer
         filters = filters * 2  # double the number of filters with each layer
 
-    x = conv2d_block(
+    x = conv3d_block(
         inputs=x,
         filters=filters,
         use_batch_norm=use_batch_norm,
@@ -207,12 +208,12 @@ def custom_unet(
     for conv in reversed(down_layers):
         filters //= 2  # decreasing number of filters with each layer
         dropout -= dropout_change_per_layer
-        x = upsample(filters, (2, 2), strides=(2, 2), padding="same")(x)
+        x = upsample(filters, (2, 2, 2), strides=(2, 2, 2), padding="same")(x)
         if use_attention:
             x = attention_concat(conv_below=x, skip_connection=conv)
         else:
             x = concatenate([x, conv])
-        x = conv2d_block(
+        x = conv3d_block(
             inputs=x,
             filters=filters,
             use_batch_norm=use_batch_norm,
@@ -221,7 +222,7 @@ def custom_unet(
             activation=activation,
         )
 
-    outputs = Conv2D(num_classes, (1, 1), activation=output_activation)(x)
+    outputs = Conv3D(num_classes, (1, 1, 1), activation=output_activation)(x)
 
     model = Model(inputs=[inputs], outputs=[outputs])
     return model
