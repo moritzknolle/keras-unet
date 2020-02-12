@@ -1,6 +1,5 @@
-import tensorflow
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import (
+from keras.models import Model
+from keras.layers import (
     BatchNormalization,
     Conv3D,
     Conv3DTranspose,
