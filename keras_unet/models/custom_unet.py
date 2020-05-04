@@ -1,18 +1,36 @@
-from keras.models import Model
-from keras.layers import (
-    BatchNormalization,
-    Conv2D,
-    Conv2DTranspose,
-    MaxPooling2D,
-    Dropout,
-    SpatialDropout2D,
-    UpSampling2D,
-    Input,
-    concatenate,
-    multiply,
-    add,
-    Activation,
-)
+from keras_unet import TF
+if TF:
+    from tensorflow.keras.models import Model
+    from tensorflow.keras.layers import (
+        BatchNormalization,
+        Conv2D,
+        Conv2DTranspose,
+        MaxPooling2D,
+        Dropout,
+        SpatialDropout2D,
+        UpSampling2D,
+        Input,
+        concatenate,
+        multiply,
+        add,
+        Activation,
+    )
+else:
+    from keras.models import Model
+    from keras.layers import (
+        BatchNormalization,
+        Conv2D,
+        Conv2DTranspose,
+        MaxPooling2D,
+        Dropout,
+        SpatialDropout2D,
+        UpSampling2D,
+        Input,
+        concatenate,
+        multiply,
+        add,
+        Activation,
+    )
 
 
 def upsample_conv(filters, kernel_size, strides, padding):
