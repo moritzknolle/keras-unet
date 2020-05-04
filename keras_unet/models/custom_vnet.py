@@ -108,7 +108,7 @@ def conv3d_block(
     return c
 
 
-def custom_unet(
+def custom_vnet(
     input_shape,
     num_classes=1,
     activation="relu",
@@ -125,7 +125,9 @@ def custom_unet(
 ):  # 'sigmoid' or 'softmax'
 
     """
-    Customisable UNet architecture (Ronneberger et al. 2015 [1]).
+    Customizable VNet architecture based on the work of
+    Fausto Milletari, Nassir Navab, Seyed-Ahmad Ahmadi in
+    V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation
 
     Arguments:
     input_shape: 4D Tensor of shape (x, y, z, num_channels)
@@ -155,7 +157,7 @@ def custom_unet(
     output_activation (str): A keras.activations.Activation to use. Sigmoid by default for binary segmentation
 
     Returns:
-    model (keras.models.Model): The built U-Net
+    model (keras.models.Model): The built V-Net
 
     Raises:
     ValueError: If dropout_type is not one of "spatial" or "standard"
@@ -172,7 +174,7 @@ def custom_unet(
     else:
         upsample = upsample_simple
 
-    # Build U-Net model
+    # Build model
     inputs = Input(input_shape)
     x = inputs
 
